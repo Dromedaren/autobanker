@@ -26,152 +26,47 @@ http://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
 This AddOn has taken inspiration and small snippets from Dustman by Ayantir, Garkin & iFedix
 ]]
 
--- Local store the event manager
-local em = GetEventManager()
-local _
+-- The namespace for Autobanker, top-level table
+if Autobanker == nil then Autobanker = {} end
+local AB = Autobanker
+local eventManager = AB.EventManager
+local events = AB.events
+local eventHandlers = AB.events.eventHandlers
+local callbackHandlers = AB.events.callbackHandlers
+local filters = AB.filters
 
-
--- Dependencies
-local LR = LibStub("libResearch-2")
-local autobankerInitializeColor = "EFFBBEA"
-
--- Create the namespace for AB, top-level table
-if not AB then AB = {} end
-
--- AddOn information
-AB.name = "Autobanker"
-AB.version = "1.6"
-AB.author = "r4cken"
-AB.website = "https://www.esoui.com/downloads/info2199-AutobankerAutomaticallydeposititems.html"
-
--- Holds our SavedVariable data
-AB.savedVars = {}
-
--- Default values for saved vars
-local defaults = {
-  worldname = GetWorldName(),
-  -- Manual or Automatic deposits
-  automaticTransfers = false,
-  useGlobalSettings = false,
-	typesToDeposit = {
-		[ITEMTYPE_SOUL_GEM] = false,
-		[ITEMTYPE_TOOL] = false,
-		[ITEMTYPE_POTION_BASE] = false,
-		[ITEMTYPE_POISON_BASE] = false,
-		[ITEMTYPE_INGREDIENT] = false,
-		[ITEMTYPE_STYLE_MATERIAL] = false,
-		[ITEMTYPE_FOOD] = false,
-		[ITEMTYPE_DRINK] = false,
-		[ITEMTYPE_TREASURE] = false,
-		[ITEMTYPE_FURNISHING_MATERIAL] = false,
-		[ITEMTYPE_RECIPE] = false,
-		[ITEMTYPE_MASTER_WRIT] = false,
-		[ITEMTYPE_POTION] = false,
-		[ITEMTYPE_POISON] = false,
-	},
-  -- Toggles depositing all intricate types
-  shouldDepositIntricate = false,
-  -- Specific categories
-  intricateType = {
-    [ITEM_TRAIT_TYPE_ARMOR_INTRICATE] = false,
-    [ITEM_TRAIT_TYPE_WEAPON_INTRICATE] = false,
-    [ITEM_TRAIT_TYPE_JEWELRY_INTRICATE] = false,
-  },
-  shouldDepositTreasureMap = false,
-  shouldDepositSurveyReport = false,
-  shouldDepositResearchable = false,
-  -- Notifications
-  notifications = {
-	deposit = true,
-	amount = true,
-  },
-  -- Currencies
-  CURRENCY_DATA =
-  {
-	[CURT_MONEY] =
-	{
-	  minimum = 5000,
-	  deposit = true,
-	  slider = { max = 200000, step = 1000 },
-	},
-	[CURT_ALLIANCE_POINTS] =
-	{
-	  minimum = 10000,
-	  deposit = true,
-	  slider = { max = 1000000, step = 5000 },
-	},
-	[CURT_TELVAR_STONES] =
-	{
-	  minimum = 300,
-	  deposit = true,
-	  slider = { max = 60000, step = 300 },
-	},
-	[CURT_WRIT_VOUCHERS] =
-	{
-	  minimum = 0,
-	  deposit = true,
-	  slider = { max = 1000, step = 10 },
-	},
-  }
-}
-
--- Make a bag cache to to find empty slots
-AB.ourBagCache = {
-	[BAG_BANK] = {},
-	[BAG_SUBSCRIBER_BANK] = {},
-}
-
-
--- BAG FUNCTION
 local function FindEmptySlotInBag(targetBag)
-	for slotIndex = 0, (GetBagSize(targetBag) - 1) do
-		if not SHARED_INVENTORY.bagCache[targetBag][slotIndex] and not AB.ourBagCache[targetBag][slotIndex] then
-			AB.ourBagCache[targetBag][slotIndex] = true
+	local bagCache = SHARED_INVENTORY:GetOrCreateBagCache(targetBag)
+	for slotIndex in ZO_IterateBagSlots(targetBag) do
+		if not AB.BagCache[targetBag][slotIndex] and not bagCache[slotIndex] then
+			AB.BagCache[targetBag][slotIndex] = true
 			return slotIndex
 		end
 	end
 	return nil
-end
+end 
 
--- Predicate function for 
--- SHARED_INVENTORY:GenerateFullSlotData(predicate, ...) 
--- where ... is a variable argument of bags to combine for the bag data
+local function MoveItem(sourceBag, sourceSlot, targetBag, targetSlot, stackCount)
+	local success = false 
+	local valueOrFailReason = nil
 
-
-local function FilterUnwantedItems(itemData)
-    local isStolen = itemData.stolen
-    local isJunk = itemData.isJunk
-    local isProtected = itemData.isPlayerLocked
-    if isStolen or isJunk or isProtected then
-      return false
-    else
-      return true
-    end
-end
-
--- ADDON CHAT OUTPUT
-function AB.ABPrint(message)
-	CHAT_SYSTEM:AddMessage(message)
-end
-
--- PROTECTED FUNCTION
-local function MoveItem(sourceBag, sourceSlot, targetBag, emptySlot, stackCount)
 	if IsProtectedFunction("RequestMoveItem") then
-		CallSecureProtected("RequestMoveItem", sourceBag, sourceSlot, targetBag, emptySlot, stackCount)
+	 success, valueOrFailReason = CallSecureProtected("RequestMoveItem", sourceBag, sourceSlot, targetBag, targetSlot, stackCount)
+		if not success then
+			AB.Print.message(valueOrFailReason)
+		end
 	else
-		RequestMoveItem(sourceBag, sourceSlot, targetBag, emptySlot, stackCount)
+		success, valueOrFailReason = RequestMoveItem(sourceBag, sourceSlot, targetBag, targetSlot, stackCount)
 	end
-end
 
--- BAG FUNCTION
--- Handle finding an empty slot and consider ESO+ and those without it
+	return success, valueOrFailReason
+end
 
 function AB.TryPlaceItemInEmptySlot(sourceBag, sourceSlot, targetBag, stackCount)
 	local emptySlot = FindEmptySlotInBag(targetBag)
 	
-	--[[ Special case handling ESO+ members because they actually 
-         have access to two separate different bank bags!
-	  ]]
+	-- Special case handling ESO+ members because they actually 
+  -- have access to two separate different bank bags!
 	if not emptySlot and IsESOPlusSubscriber() then
 		if targetBag == BAG_BANK then
 			targetBag = BAG_SUBSCRIBER_BANK
@@ -183,199 +78,174 @@ function AB.TryPlaceItemInEmptySlot(sourceBag, sourceSlot, targetBag, stackCount
 	end
 	
 	if emptySlot ~= nil then
-		MoveItem(sourceBag, sourceSlot, targetBag, emptySlot, stackCount)
-		if AB.GetSettings().notifications.deposit then
-			AB.ABPrint(zo_strformat(GetString(AB_TRANSACTION_FORMAT), GetItemLink(sourceBag, sourceSlot), stackCount))
+		if MoveItem(sourceBag, sourceSlot, targetBag, emptySlot, stackCount) then 
+			AB.BagCache[sourceBag][sourceSlot] = nil 
+			-- After the move AB.bagCache[sourceBag][sourceSlot] = nil i.e free slot again
+			-- Needs to happen in EVENT_INVENTORY_SINGLE_SLOT_UPDATED?
+			return true
+		else 
+			return false
 		end
-		return true
-	else 
-		local errorStringId = SI_INVENTORY_ERROR_BANK_FULL
-		ZO_Alert(UI_ALERT_CATEGORY_ALERT, SOUNDS.NEGATIVE_CLICK, errorStringId)
-		return false
 	end
 end
 
---
--- PREDICATE FUNCTIONS AND FILTERING
--- Checks conditions in Autobanker
-
-function AB.IsItemRightType(itemType)
-	return AB.GetSettings().typesToDeposit[itemType]
+local function CanDepositCurrency(currencyType, currencyLocation, minimum, amount)
+  if not CanCurrencyBeStoredInLocation(currencyType, currencyLocation) or IsCurrencyCapped(currencyType, currencyLocation) then
+		return false, GetString(AB_BANK_DEPOSIT_NOT_ALLOWED) -- Not allowed
+  elseif amount <= 0 then
+		local currencyIcon = ZO_Currency_GetPlatformFormattedCurrencyIcon(currencyType, nil, true)
+		local howMuchWeHave = ZO_Currency_FormatPlatform(currencyType, GetCarriedCurrencyAmount(currencyType), ZO_CURRENCY_FORMAT_AMOUNT_NAME)
+		local thresholdAt = ZO_Currency_FormatPlatform(currencyType, minimum, ZO_CURRENCY_FORMAT_AMOUNT_NAME)
+		return false, ZO_CachedStrFormat(GetString(AB_TRANSACTION_CURRENCY_MINIMUM_FORMAT), currencyIcon, thresholdAt, howMuchWeHave) -- "No player funds"
+  else
+    return true
+  end
 end
 
-function AB.IsItemTypeIntricate(itemTrait)
-	return AB.GetSettings().shouldDepositIntricate and AB.GetSettings().intricateType[itemTrait]
-end
-
-function AB.IsItemResearchable(itemLink)
-	local _, isItemResearchable = LR:GetItemTraitResearchabilityInfo(itemLink)
-	if AB.GetSettings().shouldDepositResearchable and isItemResearchable then
-		return true
-	else
-		return false
-	end
-end
-
-function AB.IsItemSurveyReport(itemType, specializedItemType)
-	return AB.GetSettings().shouldDepositSurveyReport and (itemType == ITEMTYPE_TROPHY and specializedItemType == SPECIALIZED_ITEMTYPE_TROPHY_SURVEY_REPORT )
-end
-
-function AB.IsItemTreasureMap(itemType, specializedItemType)
-	return AB.GetSettings().shouldDepositTreasureMap and (itemType == ITEMTYPE_TROPHY and specializedItemType == SPECIALIZED_ITEMTYPE_TROPHY_TREASURE_MAP)
-end
-
-function AB.IsItemCharacterBound(itemLink)
-	local bindType = GetItemLinkBindType(itemLink)
-    local isBound = IsItemLinkBound(itemLink)
-    return isBound and bindType == BIND_TYPE_ON_PICKUP_BACKPACK
-end
+local function DepositCurrency(currencyType, currencyData)
+  local amount = GetCarriedCurrencyAmount(currencyType) - currencyData.minimum
+  local success, reason = CanDepositCurrency(currencyType, CURRENCY_LOCATION_BANK, minimum, amount)
+  if success then
+    local maxTransfer = GetMaxBankDeposit(currencyType)
+    if amount > maxTransfer then amount = maxTransfer end
+		DepositCurrencyIntoBank(currencyType, amount)
+		-- Registered with EVENT_BANKED_CURRENCY_UPDATE that prints the data on success :)
+  else
 		
-function AB.ItemMeetsConditions(itemType, specializedItemType, itemTrait, itemLink)
-	return AB.IsItemRightType(itemType) or AB.IsItemTypeIntricate(itemTrait) or AB.IsItemResearchable(itemLink) or AB.IsItemSurveyReport(itemType, specializedItemType) or AB.IsItemTreasureMap(itemType, specializedItemType)
+		AB.Print.message(ZO_CachedStrFormat(reason))
+  end 
 end
 
-function AB.GetCurrencyToDeposit(currencyType)
-  local curr = AB.savedVars.CURRENCY_DATA[currencyType]
-  if curr.deposit then
-    local thisMuchOf = GetCarriedCurrencyAmount(currencyType) - curr.minimum
-	if thisMuchOf > 0 then
-	  local alertString = zo_strformat(SI_FIRST_SPECIAL_CURRENCY, GetString(AB_CURT_TRANSFER_FORMAT), ZO_Currency_FormatPlatform(currencyType, thisMuchOf, ZO_CURRENCY_FORMAT_AMOUNT_ICON))
-	  AB.ABPrint(alertString)
-	  DepositCurrencyIntoBank(currencyType, thisMuchOf)
+function AB.TryDepositCurrencies()
+	for currencyType, currencyData in ipairs(AB.GetSettings().CURRENCY_DATA) do
+	  if currencyData.deposit then
+			DepositCurrency(currencyType, currencyData)
+	  end
 	end
+end
+
+-- Locates all instances of a specified item ID in the specified bag
+local function FindItemInBag(itemId, bagItemData)
+	local found = {}
+	for slot, itemData in ipairs(bagItemData) do
+		if itemId == itemData.itemId then
+			found[#found + 1] = {itemData.bagId, itemData.slotIndex}
+		end
+	end
+	return found
+end
+
+local function StackBankbag(targetBankBag)
+  if targetBankBag == BAG_BANK or targetBankBag == BAG_SUBSCRIBER_BANK then 
+    StackBag(BAG_BANK)
+    StackBag(BAG_SUBSCRIBER_BANK)
+  elseif IsHouseBankBag(targetBankBag) then
+    StackBag(targetBankBag)
   end
 end
 
 
---
--- EVENT
--- The main depositing function
-local function TriggerAutobanker()
-  local nItemsDeposited = 0
-  local transactions = 0
-  local bagCache = SHARED_INVENTORY:GenerateFullSlotData(FilterUnwantedItems, BAG_BACKPACK)
-  
-  for _ , data in pairs(bagCache) do
-    if transactions < 50 then
-      local itemLink = GetItemLink(BAG_BACKPACK, data.slotIndex)
-      -- returns [ItemType]
-      local itemType, specializedItemType = GetItemType(BAG_BACKPACK, data.slotIndex)
-      -- local itemName = GetItemName(BAG_BACKPACK, data.slotIndex)
-      -- returns [ItemTraitType]
-      local itemTrait = GetItemTrait(BAG_BACKPACK, data.slotIndex) 
-      if data.stackCount >= 1 then
-        if AB.ItemMeetsConditions(itemType, specializedItemType, itemTrait, itemLink) and not AB.IsItemCharacterBound(itemLink) then
-          if AB.TryPlaceItemInEmptySlot(BAG_BACKPACK, data.slotIndex, BAG_BANK, data.stackCount) then
-            if (data.isJunk) then
-              AB.ABPrint("True")
-            end
-            transactions = transactions + 1
-            nItemsDeposited = nItemsDeposited + data.stackCount
-          else
-            break
-          end
-        end
-      end
-    end
+function eventHandlers.OnTriggerAutobanker(eventCode, targetBankBag)
+  -- Register OnCurrencyDeposited
+  eventManager:RegisterForEvent(AB.addonVars.gAddonName, EVENT_BANKED_CURRENCY_UPDATE, eventHandlers.OnCurrencyDeposited)
+
+  if targetBankBag == BAG_BANK or targetBankBag == BAG_SUBSCRIBER_BANK or IsHouseBankBag(targetBankBag) then
+		local transactions = 0
+		local itemsDeposited = 0
+
+		StackBag(BAG_BACKPACK)
+
+		local backpackCache = SHARED_INVENTORY:GenerateFullSlotData(filters.RemoveUnwantedItems, BAG_BACKPACK)
+
+		--[[ 
+			TODO: Implement bag stacking of items 
+		local bankbagsCache = SHARED_INVENTORY:GenerateFullSlotData(filters.KeepOnlyIncompleteStacks, BAG_BANK, BAG_SUBSCRIBER_BANK)
+
+		local foundItemAlready = {}
+
+		for _, bankItemData in ipairs(bankbagsCache) do
+			if not foundItemAlready[bankbagsCache.itemId] then 
+				local slots = FindItemInBag(bankItemData.itemId, backpackCache)
+				-- stack onto bank
+				foundItemsAlready[bankbagsCache.itemId] = true
+			end
+		end
+
+		foundItemAlready = nil 
+		]]
+
+		-- NOTE: This most likely needs to be done ASYNC or with some kind of delay ZO_CallLater or something
+		if transactions <= 98 then -- ZOS antispam Limit?
+			for _, itemData in ipairs(backpackCache) do
+				local itemLink = GetItemLink(BAG_BACKPACK, itemData.slotIndex)
+				local itemId = GetItemInstanceId(BAG_BACKPACK, itemData.slotIndex)
+				local stackSize, maxStack = GetSlotStackSize(BAG_BACKPACK, itemData.slotIndex)
+
+				local couldPlaceItem = AB.TryPlaceItemInEmptySlot(BAG_BACKPACK, itemData.slotIndex, targetBankBag, stackSize)
+				if couldPlaceItem then 
+					itemsDeposited = itemsDeposited + stackSize
+					transactions = transactions + 1
+					AB.Print.itemDeposited(itemLink, stackSize)
+				else
+					-- Bank is completely FULL
+					break
+				end
+			end
+		end
+
+		AB.Print.itemsDeposited(itemsDeposited)
+
+		AB.TryDepositCurrencies()
   end
-  
-  if nItemsDeposited > 0 and AB.GetSettings().notifications.amount then
-	AB.ABPrint(zo_strformat(GetString(AB_COUNT_FORMAT), nItemsDeposited))
-  end
-  
-  for currencyType, _ in ipairs(defaults.CURRENCY_DATA) do
-    AB.GetCurrencyToDeposit(currencyType)
-  end
+	-- ON_BANK_CLOSE Unregisters OnCurrencyDeposited
+	StackBankbag(targetBankBag)
 end
 
-
 --
--- KEYBINDS
--- Autobanker button group on the keybindstrip
-local autobankerKeybindButtonGroup =
+-- KEYBIND
+--
+AB.autobankerKeybindButtonGroup =
 {
   alignment = KEYBIND_STRIP_ALIGN_CENTER,
   {
     name = GetString(AB_TRIGGER_AUTOBANKER),
     keybind = "UI_SHORTCUT_QUATERNARY",
-    callback = TriggerAutobanker,
+    callback = function() eventHandlers.OnTriggerAutobanker(EVENT_OPEN_BANK, GetBankingBag()) end,
   },
 }
 
 --
--- Bank scene BANK_FRAGMENT 
--- Enable Autobankers keybindstrip
-local function AutobankerOnStateChanged(oldState, newState)
-  if newState == SCENE_SHOWING then
-	KEYBIND_STRIP:AddKeybindButtonGroup(autobankerKeybindButtonGroup)
-  elseif newState == SCENE_HIDDEN then
-	KEYBIND_STRIP:RemoveKeybindButtonGroup(autobankerKeybindButtonGroup)
-  end
-end
-
--- CALLBACK
--- Enable Manual Autobanking
-local function EnableManualAutobanking()
-  BANK_FRAGMENT:RegisterCallback("StateChange", AutobankerOnStateChanged)
-  BACKPACK_BANK_LAYOUT_FRAGMENT:RegisterCallback("StateChange", AutobankerOnStateChanged)
-  AB.ABPrint(zo_strformat("Enabling Manual Autobanking"))
-end
-
--- CALLBACK
--- Disable Manual Autobanking
-local function DisableManualAutobanking()
-  BANK_FRAGMENT:UnregisterCallback("StateChange", AutobankerOnStateChanged)
-  BACKPACK_BANK_LAYOUT_FRAGMENT:UnregisterCallback("StateChange", AutobankerOnStateChanged)
-  AB.ABPrint(zo_strformat("Disabling Manual Autobanking"))
-end
-
--- Toggle the usage of Autobanker automatic deposits.
-function AB.ToggleManualOverride()
-  if AB.savedVars.automaticTransfers then
-	em:RegisterForEvent(AB.name, EVENT_OPEN_BANK, TriggerAutobanker)
-	DisableManualAutobanking()
-  else
-    em:UnregisterForEvent(AB.name, EVENT_OPEN_BANK)
-	EnableManualAutobanking()
-  end
-end
-
---
--- EVENT
--- AddOn PlayerActivated
-local function OnPlayerActivated()
-  em:UnregisterForEvent(AB.name, EVENT_PLAYER_ACTIVATED)
-  -- Initialization message
-  AB.ABPrint(zo_strformat("|c<<1>><<2>>|r", autobankerInitializeColor, GetString(AB_INIT)))
-end
-
-
-local function SetProfileSettings(characterId)
-
-end
---
--- EVENT
 -- AddOn Initialization
-local function Initialize(event, addon)
-  
-	-- filter for just Autobanker addon event
-	if addon ~= AB.name then return end
-	em:UnregisterForEvent(AB.name, EVENT_ADD_ON_LOADED)
-	-- Load saved variables
-    AB.savedVars = ZO_SavedVars:NewCharacterIdSettings("AutobankerSavedVars", 4, nil, defaults)
-	-- Make our options menu
-	AB.MakeMenu(defaults)
-	-- Register handlers for Manual and Automatic Autobanking
-	if AB.savedVars.automaticTransfers then
-	  em:RegisterForEvent(AB.name, EVENT_OPEN_BANK, TriggerAutobanker)
-	else
-	  EnableManualAutobanking()
-	end
-	
-	em:RegisterForEvent(AB.name, EVENT_PLAYER_ACTIVATED, OnPlayerActivated )
+--
+local function OnPlayerActivated()
+  eventManager:UnregisterForEvent(AB.addonVars.gAddonName, EVENT_PLAYER_ACTIVATED)
+  -- Initialization message
+  AB.Print.message(zo_strformat("<<1>> <<2>>", GetString(AB_NAME_DISPLAY), GetString(AB_INIT)))
+  AB.addonVars.gPlayerActivated = true
 end
 
---
--- EVENT
--- Register for the loading of our addon
-em:RegisterForEvent(AB.name, EVENT_ADD_ON_LOADED, Initialize)
+local function Initialize(event, addonName)
+	-- filter for just Autobanker's addon event  
+	if addonName ~= AB.addonVars.gAddonName then return end
+	eventManager:UnregisterForEvent(AB.addonVars.gAddonName, EVENT_ADD_ON_LOADED)
+
+	if AB.libsProperlyLoaded then
+		-- Load saved variables
+	  AB.LoadSavedVariables()
+	  AB.addonVars.gSettingsLoaded = true
+
+	  -- Make our options menu
+	  AB.MakeMenu()
+	
+	  -- Depending on the saved settings, enable or disable automatic transfers
+	  events.ToggleManualBanking()
+	  eventManager:RegisterForEvent(AB.addonVars.gAddonName, EVENT_CLOSE_BANK, eventHandlers.OnCloseBank)
+
+	  AB.addonVars.gAddonLoaded = true
+	  eventManager:RegisterForEvent(AB.addonVars.gAddonName, EVENT_PLAYER_ACTIVATED, OnPlayerActivated)
+	else
+		AB.Print.message(zo_strformat(GetString(AB_ADDON_FAILURE), AB.addonVars.gAddonName)) return
+	end
+end
+
+eventManager:RegisterForEvent(AB.addonVars.gAddonName, EVENT_ADD_ON_LOADED, Initialize)

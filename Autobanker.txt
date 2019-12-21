@@ -1,9 +1,10 @@
 ﻿## Title: |cEFFBBEAutobanker|r
-## Version: 1.6
+## Version: 1.7
 ## Author: r4cken
 ## Description: Autobanker automatically deposits items to the bank and allows you to decide what types of items to deposit.
-## APIVersion: 100025
-## DependsOn: LibAddonMenu-2.0 LibStub
+## APIVersion: 100029
+## DependsOn: LibAddonMenu-2.0 LibResearch
+## OptionalDependsOn: LibStub
 ## SavedVariables: AutobankerSavedVars AutobankerGlobalSavedVars
 
 ## This Add-on is not created by, affiliated with or sponsored by ZeniMax Media Inc. or its affiliates. 
@@ -13,12 +14,22 @@
 ## You can read the full terms at https://account.elderscrollsonline.com/add-on-terms
 
 
-lib\libResearch\libResearch.lua
-
 ; Load the AddOn files, declare them in the correct order so that functions are declared before usage.
 
-; Languages
+; Language Support
 Localization\en.lua
+
+; Constants & Lib Loading
+Autobanker_Constants.lua
+
+; Default Settings
+Autobanker_Settings.lua
+
+; Banking Events
+Autobanker_Events.lua
+
+; functions
+Autobanker_Functions.lua
 
 ; Main AddOn code
 Autobanker.lua
