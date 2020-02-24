@@ -34,11 +34,15 @@ This AddOn has taken inspiration and small snippets from Dustman by Ayantir, Gar
 	AB_NAME_DISPLAY = "|cEFFBBEAutobanker|r",
 	AB_NAME_AUTHOR_DISPLAY = "|cEFFBBEr4cken|r",
 	AB_NAME_AUTHOR = "@r4cken",
+	AB_WEBSITE = "https://www.esoui.com/downloads/info2199-AutobankerAutomaticallydeposititems.html",
+	AB_VERSION = "1.7",
 	AB_INIT = "Initialized...",
 	AB_TRIGGER_AUTOBANKER = "Run " .. AB_NAME,
 
 	-- Menu
 	AB_MANUAL_OVERRIDE = "Automatic " .. AB_NAME .. " transfers",
+	AB_MANUAL_ENABLED = "Manual Autobanking: Enabled",
+	AB_MANUAL_DISABLED = "Manual Autobanking: Disabled",
 	AB_MANUAL_OVERRIDE_TOOLTIP = "This option allows you to manually activate " .. AB_NAME .. " with a button press on the bottom of the banking interaction scene instead of having Autobanker automatically depositing for you.",
 	AB_SLIDER_TOOLTIP = AB_NAME.. " will deposit everything above the slider threshold",
 
@@ -62,6 +66,7 @@ This AddOn has taken inspiration and small snippets from Dustman by Ayantir, Gar
 	AB_ADDON_FAILURE = "Error: Dependencies not loaded successfully, <<1>> will not load.",
   AB_BANK_DEPOSIT_NOT_ALLOWED = GetString(SI_INVENTORY_ERROR_BANK_DEPOSIT_NOT_ALLOWED),
 	AB_NO_PLAYER_FUNDS = GetString(SI_GAMEPAD_INVENTORY_ERROR_NO_PLAYER_FUNDS),
+	AB_BANK_IS_FULL = GetString(SI_INVENTORY_ERROR_BANK_FULL),
 }
 
 for stringId, stringValue in pairs(strings) do

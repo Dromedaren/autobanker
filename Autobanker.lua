@@ -51,7 +51,7 @@ local function MoveItem(sourceBag, sourceSlot, targetBag, targetSlot, stackCount
 	local valueOrFailReason = nil
 
 	if IsProtectedFunction("RequestMoveItem") then
-	 success, valueOrFailReason = CallSecureProtected("RequestMoveItem", sourceBag, sourceSlot, targetBag, targetSlot, stackCount)
+		success, valueOrFailReason = CallSecureProtected("RequestMoveItem", sourceBag, sourceSlot, targetBag, targetSlot, stackCount)
 		if not success then
 			AB.Print.message(valueOrFailReason)
 		end
@@ -110,8 +110,7 @@ local function DepositCurrency(currencyType, currencyData)
     if amount > maxTransfer then amount = maxTransfer end
 		DepositCurrencyIntoBank(currencyType, amount)
 		-- Registered with EVENT_BANKED_CURRENCY_UPDATE that prints the data on success :)
-  else
-		
+  else		
 		AB.Print.message(ZO_CachedStrFormat(reason))
   end 
 end

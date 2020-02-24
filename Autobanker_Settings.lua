@@ -47,20 +47,23 @@ local defaults = {
 		amount = true,
 	},
   typesToDeposit = {
-		[ITEMTYPE_SOUL_GEM] = false,
-		[ITEMTYPE_TOOL] = false,
-		[ITEMTYPE_POTION_BASE] = false,
-		[ITEMTYPE_POISON_BASE] = false,
-		[ITEMTYPE_INGREDIENT] = false,
-		[ITEMTYPE_STYLE_MATERIAL] = false,
-		[ITEMTYPE_FOOD] = false,
 		[ITEMTYPE_DRINK] = false,
-		[ITEMTYPE_TREASURE] = false,
+		[ITEMTYPE_FOOD] = false,
 		[ITEMTYPE_FURNISHING_MATERIAL] = false,
-		[ITEMTYPE_RECIPE] = false,
+		[ITEMTYPE_INGREDIENT] = false,
 		[ITEMTYPE_MASTER_WRIT] = false,
-		[ITEMTYPE_POTION] = false,
 		[ITEMTYPE_POISON] = false,
+		[ITEMTYPE_POISON_BASE] = false,
+		[ITEMTYPE_POTION] = false,
+		[ITEMTYPE_POTION_BASE] = false,
+		[ITEMTYPE_RAW_MATERIAL] = false, -- new
+		[ITEMTYPE_REAGENT] = false, -- new
+		[ITEMTYPE_RECIPE] = false,
+		[ITEMTYPE_RACIAL_STYLE_MOTIF] = false, -- new
+		[ITEMTYPE_SOUL_GEM] = false,
+		[ITEMTYPE_STYLE_MATERIAL] = false,
+		[ITEMTYPE_TOOL] = false,
+		[ITEMTYPE_TREASURE] = false,
   },
   -- Specific categories
   intricateType = {
